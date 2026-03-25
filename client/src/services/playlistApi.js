@@ -27,6 +27,13 @@ const playlistApi = {
   getSheet: (sheetId) => api.get(`/youtube-playlist/sheet/${sheetId}`),
 
   /**
+   * Rename a generated sheet.
+   * PUT /api/youtube-playlist/sheet/:id
+   */
+  renameSheet: (sheetId, name) =>
+    api.put(`/youtube-playlist/sheet/${sheetId}`, { name }),
+
+  /**
    * Delete a sheet and all its problems.
    * DELETE /api/youtube-playlist/sheet/:id
    */

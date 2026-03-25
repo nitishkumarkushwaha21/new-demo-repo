@@ -8,9 +8,36 @@ require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-const hasClerkConfig = Boolean(
-  process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY,
-);
+const hasClerkConfig = Boolean(process.env.CLERK_SECRET_KEY);
+const isDevelopment = process.env.NODE_ENV === "development";
+const isProduction = process.env.NODE_ENV === "production";
+const enableDevAuthFallback =
+  isDevelopment && process.env.ENABLE_DEV_AUTH_FALLBACK === "true";
+
+const parsedPort = Number(PORT);
+if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
+  throw new Error(`[gateway] Invalid PORT value: ${PORT}`);
+}
+
+if (isProduction) {
+  const missing = [
+    "UNIFIED_SERVICE_URL",
+    "PLAYLIST_SERVICE_URL",
+    "PROFILE_SERVICE_URL",
+  ].filter((key) => !String(process.env[key] || "").trim());
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[gateway] Missing required env vars in production: ${missing.join(", ")}`,
+    );
+  }
+}
+
+if (!hasClerkConfig && !enableDevAuthFallback) {
+  throw new Error(
+    "[gateway] Missing CLERK_SECRET_KEY. For local-only fallback auth, run with NODE_ENV=development and ENABLE_DEV_AUTH_FALLBACK=true.",
+  );
+}
 
 app.use(cors());
 // app.use(express.json()); // Removed to avoid body parsing issues with proxy
@@ -26,7 +53,7 @@ if (hasClerkConfig) {
     req.authUserId = userId;
     next();
   });
-} else {
+} else if (enableDevAuthFallback) {
   console.warn(
     "[gateway] Clerk keys missing. Running in development fallback auth mode.",
   );
@@ -37,10 +64,14 @@ if (hasClerkConfig) {
   });
 }
 
-const FILE_SERVICE = process.env.FILE_SERVICE_URL || "http://127.0.0.1:5002";
+const DEFAULT_UNIFIED_SERVICE = "http://127.0.0.1:5007";
+const UNIFIED_SERVICE = process.env.UNIFIED_SERVICE_URL;
+const FILE_SERVICE =
+  UNIFIED_SERVICE || process.env.FILE_SERVICE_URL || DEFAULT_UNIFIED_SERVICE;
 const PROBLEM_SERVICE =
-  process.env.PROBLEM_SERVICE_URL || "http://127.0.0.1:5003";
-const AI_SERVICE = process.env.AI_SERVICE_URL || "http://127.0.0.1:5004";
+  UNIFIED_SERVICE || process.env.PROBLEM_SERVICE_URL || DEFAULT_UNIFIED_SERVICE;
+const AI_SERVICE =
+  UNIFIED_SERVICE || process.env.AI_SERVICE_URL || DEFAULT_UNIFIED_SERVICE;
 const PLAYLIST_SERVICE =
   process.env.PLAYLIST_SERVICE_URL || "http://127.0.0.1:5005";
 const PROFILE_SERVICE =

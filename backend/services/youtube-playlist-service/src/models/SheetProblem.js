@@ -13,6 +13,11 @@ const SheetProblem = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    userId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: "legacy",
+    },
     sheet_id: {
       type: DataTypes.INTEGER,
       allowNull: false,

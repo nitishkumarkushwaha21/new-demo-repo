@@ -5,6 +5,7 @@ const {
   getSheet,
   getAllSheets,
   deleteSheet,
+  renameSheet,
   createFolderFromSheet,
 } = require("../controllers/playlistController");
 
@@ -16,6 +17,10 @@ router.get("/sheets", getAllSheets);
 
 // GET   /api/youtube-playlist/sheet/:id               → Get a specific sheet with problems
 router.get("/sheet/:id", getSheet);
+
+// PATCH /api/youtube-playlist/sheet/:id              → Rename a sheet
+router.patch("/sheet/:id", renameSheet);
+router.put("/sheet/:id", renameSheet);
 
 // POST  /api/youtube-playlist/sheet/:id/create-folder → Create folder + files in explorer
 router.post("/sheet/:id/create-folder", createFolderFromSheet);

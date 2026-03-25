@@ -1,7 +1,12 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const RevisionSchema = new mongoose.Schema(
   {
+    ownerUserId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     username: {
       type: String,
       required: true,
@@ -15,7 +20,7 @@ const RevisionSchema = new mongoose.Schema(
     },
     difficulty: {
       type: String,
-      enum: ['Easy', 'Medium', 'Hard'],
+      enum: ["Easy", "Medium", "Hard"],
       required: true,
     },
     leetcodeUrl: {
@@ -25,10 +30,13 @@ const RevisionSchema = new mongoose.Schema(
   },
   {
     timestamps: true, // createdAt, updatedAt
-  }
+  },
 );
 
 // Prevent duplicate problem for same user
-RevisionSchema.index({ username: 1, problemName: 1 }, { unique: true });
+RevisionSchema.index(
+  { ownerUserId: 1, username: 1, problemName: 1 },
+  { unique: true },
+);
 
-module.exports = mongoose.model('Revision', RevisionSchema);
+module.exports = mongoose.model("Revision", RevisionSchema);

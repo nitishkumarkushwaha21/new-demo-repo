@@ -77,6 +77,10 @@ const fetchLeetCodeProfile = async (username) => {
   };
 };
 
+function getAuthenticatedUserId(req) {
+  return req.headers["x-user-id"];
+}
+
 /**
  * GET /api/profile-analysis/:username
  */
@@ -106,6 +110,11 @@ const analyzeProfile = async (req, res) => {
  * POST /api/profile-analysis/revision
  */
 const addRevision = async (req, res) => {
+  const ownerUserId = getAuthenticatedUserId(req);
+  if (!ownerUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const { username, problemName, difficulty, leetcodeUrl } = req.body;
   if (!username || !problemName || !difficulty)
     return res
@@ -113,14 +122,19 @@ const addRevision = async (req, res) => {
       .json({ error: "username, problemName, and difficulty are required." });
 
   try {
+    const normalizedUsername = username.toLowerCase().trim();
+    const normalizedProblemName = problemName.trim();
+
     const revision = await Revision.findOneAndUpdate(
       {
-        username: username.toLowerCase().trim(),
-        problemName: problemName.trim(),
+        ownerUserId,
+        username: normalizedUsername,
+        problemName: normalizedProblemName,
       },
       {
-        username: username.toLowerCase().trim(),
-        problemName: problemName.trim(),
+        ownerUserId,
+        username: normalizedUsername,
+        problemName: normalizedProblemName,
         difficulty,
         leetcodeUrl: leetcodeUrl || "",
       },
@@ -139,11 +153,17 @@ const addRevision = async (req, res) => {
  * GET /api/profile-analysis/revision/:username
  */
 const getRevisions = async (req, res) => {
+  const ownerUserId = getAuthenticatedUserId(req);
+  if (!ownerUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const { username } = req.params;
   if (!username)
     return res.status(400).json({ error: "Username is required." });
   try {
     const revisions = await Revision.find({
+      ownerUserId,
       username: username.toLowerCase().trim(),
     }).sort({ createdAt: -1 });
     return res.json({ data: revisions });
@@ -157,8 +177,16 @@ const getRevisions = async (req, res) => {
  * DELETE /api/profile-analysis/revision/:id
  */
 const deleteRevision = async (req, res) => {
+  const ownerUserId = getAuthenticatedUserId(req);
+  if (!ownerUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
-    const deleted = await Revision.findByIdAndDelete(req.params.id);
+    const deleted = await Revision.findOneAndDelete({
+      _id: req.params.id,
+      ownerUserId,
+    });
     if (!deleted) return res.status(404).json({ error: "Revision not found." });
     return res.json({ message: "Removed from revision", data: deleted });
   } catch (err) {
@@ -187,7 +215,9 @@ const getRecommendations = async (req, res) => {
 };
 
 const FILE_SERVICE_URL =
-  (process.env.FILE_SERVICE_URL || "http://localhost:5002") + "/api/files";
+  (process.env.FILE_SERVICE_URL ||
+    process.env.UNIFIED_SERVICE_URL ||
+    "http://127.0.0.1:5007") + "/api/files";
 
 /**
  * POST /api/profile-analysis/import-weak-areas

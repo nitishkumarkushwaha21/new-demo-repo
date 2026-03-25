@@ -24,21 +24,38 @@ const ProfileInput = ({ onAnalyze, isLoading }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] p-6 mb-6 mt-4 border border-gray-100 dark:border-gray-700">
-      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Analyze LeetCode Profile</h2>
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-grow flex flex-col gap-1">
+    <div className="mb-6 mt-4 overflow-hidden rounded-[28px] border border-slate-200/70 bg-white/85 p-6 shadow-[0_25px_60px_-40px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-600 dark:text-amber-300">
+            Analyze LeetCode Profile
+          </p>
+          <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+            Paste a username or profile URL
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+            We&apos;ll normalize the profile link, calculate topic coverage,
+            and generate a cleaner practice queue from the weak spots.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+          Works with `leetcode.com/u/username/` and plain handles.
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row">
+        <div className="flex flex-grow flex-col gap-2">
           <input
             type="text"
             placeholder="Enter username or paste leetcode.com profile URL..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !isLoading && input.trim() && handleAnalyze()}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all text-base"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-inner shadow-slate-200/50 outline-none transition-all placeholder:text-slate-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-200/60 dark:border-slate-700 dark:bg-slate-950/80 dark:text-white dark:shadow-none dark:placeholder:text-slate-500 dark:focus:border-amber-400 dark:focus:ring-amber-500/20"
           />
           {/* Show extracted username preview when URL is pasted */}
           {isUrl && parsedUsername && (
-            <p className="text-xs text-green-600 dark:text-green-400 ml-1">
+            <p className="ml-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               ✓ Username detected: <strong>{parsedUsername}</strong>
             </p>
           )}
@@ -46,7 +63,7 @@ const ProfileInput = ({ onAnalyze, isLoading }) => {
         <button
           onClick={handleAnalyze}
           disabled={!input.trim() || isLoading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-8 rounded-lg transition-colors flex items-center justify-center min-w-[140px] shadow-sm hover:shadow self-start"
+          className="flex min-w-[152px] items-center justify-center self-start rounded-2xl bg-slate-900 px-8 py-4 font-semibold text-white shadow-[0_18px_40px_-20px_rgba(15,23,42,0.9)] transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-amber-400 dark:text-slate-950 dark:hover:bg-amber-300 dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
         >
           {isLoading ? (
             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

@@ -24,7 +24,7 @@ createRoot(document.getElementById("root")).render(
           minHeight: "100vh",
         }}
       >
-        Missing VITE_CLERK_PUBLISHABLE_KEY in client/.env
+        Missing VITE_CLERK_PUBLISHABLE_KEY in root .env
       </div>
     )}
   </StrictMode>,

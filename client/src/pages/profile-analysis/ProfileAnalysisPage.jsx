@@ -226,60 +226,79 @@ const ProfileAnalysisPage = () => {
     : null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-colors duration-200">
-      <div className="mb-10 text-center">
-        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white sm:text-5xl tracking-tight">
-          Profile Analysis
-        </h1>
-        <p className="mt-4 text-xl font-medium text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
-          Get deep insights into your LeetCode journey, find your weak spots,
-          and get smart problem recommendations.
-        </p>
-      </div>
+    <div className="relative isolate overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.22),transparent_58%)]" />
+      <div className="pointer-events-none absolute right-0 top-24 -z-10 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.18),transparent_62%)] blur-3xl" />
 
-      <ProfileInput onAnalyze={handleAnalyze} isLoading={isLoading} />
-
-      {error && (
-        <div className="mb-6 flex items-start gap-3 px-5 py-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400">
-          <span className="text-xl shrink-0">⚠️</span>
-          <span className="font-medium">{error}</span>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-10 overflow-hidden rounded-[32px] border border-white/60 bg-[linear-gradient(135deg,rgba(15,23,42,0.97),rgba(30,41,59,0.94),rgba(51,65,85,0.92))] px-6 py-8 text-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.85)] sm:px-8">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            Interview Readiness Dashboard
+          </div>
+          <h1 className="max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">
+            Profile Analysis
+          </h1>
+          <p className="mt-4 max-w-3xl text-base font-medium leading-7 text-slate-200 sm:text-lg">
+            Audit your LeetCode progress, surface the gaps holding you back,
+            and turn weak areas into a sharper practice plan.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3 text-sm font-semibold text-slate-200">
+            <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
+              Topic signals
+            </span>
+            <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sky-200 ring-1 ring-inset ring-sky-300/20">
+              Difficulty mix
+            </span>
+            <span className="rounded-full bg-amber-400/15 px-3 py-1 text-amber-100 ring-1 ring-inset ring-amber-300/20">
+              Generated questions
+            </span>
+          </div>
         </div>
-      )}
 
-      {profileData && (
-        <div className="animate-fadeIn">
-          <ProfileSummaryCards data={profileData} />
+        <ProfileInput onAnalyze={handleAnalyze} isLoading={isLoading} />
 
-          {verdict && (
-            <VerdictSection
-              score={verdict.score}
-              level={verdict.level}
-              message={verdict.message}
-            />
-          )}
+        {error && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200/80 bg-red-50/90 px-5 py-4 text-red-700 shadow-[0_20px_45px_-35px_rgba(220,38,38,0.8)] backdrop-blur">
+            <span className="text-xl shrink-0">⚠️</span>
+            <span className="font-medium">{error}</span>
+          </div>
+        )}
 
-          <ChartsSection diffData={chartDiffData} topicData={chartTopicData} />
+        {profileData && (
+          <div className="animate-fadeIn">
+            <ProfileSummaryCards data={profileData} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <StrengthSection
-              strongTopics={topics?.filter((t) => t.solved >= 50)}
-            />
-            <WeaknessSection
-              weakTopics={topics?.filter((t) => t.solved <= 20)}
+            {verdict && (
+              <VerdictSection
+                score={verdict.score}
+                level={verdict.level}
+                message={verdict.message}
+              />
+            )}
+
+            <ChartsSection diffData={chartDiffData} topicData={chartTopicData} />
+
+            <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-2">
+              <StrengthSection
+                strongTopics={topics?.filter((t) => t.solved >= 50)}
+              />
+              <WeaknessSection
+                weakTopics={topics?.filter((t) => t.solved <= 20)}
+              />
+            </div>
+
+            <RecommendationSection
+              recommendations={recommendations}
+              onAddToRevision={handleAddToRevision}
+              onExportSheet={exportRevisionSheet}
+              hasRevisionRows={revisionSheetRows.length > 0}
+              onImportToExplorer={handleImportToExplorer}
+              isImporting={isImporting}
+              importResult={importResult}
             />
           </div>
-
-          <RecommendationSection
-            recommendations={recommendations}
-            onAddToRevision={handleAddToRevision}
-            onExportSheet={exportRevisionSheet}
-            hasRevisionRows={revisionSheetRows.length > 0}
-            onImportToExplorer={handleImportToExplorer}
-            isImporting={isImporting}
-            importResult={importResult}
-          />
-        </div>
-      )}
+        )}
+      </div>
 
       <style
         dangerouslySetInnerHTML={{

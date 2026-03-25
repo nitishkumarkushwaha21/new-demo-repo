@@ -1,141 +1,122 @@
 services:
-  # ── MongoDB ───────────────────────────────────────────────────────────────────
   mongodb:
     image: mongo:7
-    container_name: algonote-mongodb
-    ports:
-      - "27017:27017"
+    restart: unless-stopped
     volumes:
       - mongo-data:/data/db
-    networks:
-      - algonote-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-  # ── Frontend ─────────────────────────────────────────────────────────────────
-  client:
-    build: ./client
-    image: nikuku/algonote-client:latest
-    container_name: algonote-client
-    ports:
-      - "80:80"
+  unified-service:
+    build:
+      context: ./backend/services/unified-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5007
+      UNIFIED_SERVICE_PORT: 5007
+    expose:
+      - "5007"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5007/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  youtube-playlist-service:
+    build:
+      context: ./backend/services/youtube-playlist-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PLAYLIST_SERVICE_PORT: 5005
+      FILE_SERVICE_URL: http://unified-service:5007
+      PROBLEM_SERVICE_URL: http://unified-service:5007
     depends_on:
-      - gateway
-    networks:
-      - algonote-net
+      unified-service:
+        condition: service_healthy
+    expose:
+      - "5005"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5005/',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
 
-  # ── API Gateway ───────────────────────────────────────────────────────────────
+  profile-analysis-service:
+    build:
+      context: ./backend/services/profile-analysis-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PROFILE_SERVICE_PORT: 5006
+      MONGO_URI: mongodb://mongodb:27017/algonote
+      FILE_SERVICE_URL: http://unified-service:5007
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      unified-service:
+        condition: service_healthy
+    expose:
+      - "5006"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5006/',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
   gateway:
-    build: ./backend/gateway
-    image: nikuku/algonote-gateway:latest
-    container_name: algonote-gateway
+    build:
+      context: ./backend/gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      UNIFIED_SERVICE_URL: http://unified-service:5007
+      PLAYLIST_SERVICE_URL: http://youtube-playlist-service:5005
+      PROFILE_SERVICE_URL: http://profile-analysis-service:5006
+    depends_on:
+      unified-service:
+        condition: service_healthy
+      youtube-playlist-service:
+        condition: service_healthy
+      profile-analysis-service:
+        condition: service_healthy
     ports:
       - "5001:5001"
-    environment:
-      - PORT=5001
-      - FILE_SERVICE_URL=http://file-service:5002
-      - PROBLEM_SERVICE_URL=http://problem-service:5003
-      - AI_SERVICE_URL=http://ai-service:5004
-      - PLAYLIST_SERVICE_URL=http://youtube-playlist-service:5005
-      - PROFILE_SERVICE_URL=http://profile-analysis-service:5006
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5001/',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+    restart: unless-stopped
     depends_on:
-      - file-service
-      - problem-service
-      - ai-service
-      - youtube-playlist-service
-      - profile-analysis-service
-    networks:
-      - algonote-net
-
-  # ── File Service ──────────────────────────────────────────────────────────────
-  file-service:
-    build: ./backend/services/file-service
-    image: nikuku/algonote-file-service:latest
-    container_name: algonote-file-service
+      gateway:
+        condition: service_healthy
     ports:
-      - "5002:5002"
-    environment:
-      - PORT=5002
-      - PROBLEM_SERVICE_URL=http://problem-service:5003
-    env_file:
-      - .env
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    networks:
-      - algonote-net
-
-  # ── Problem Service ───────────────────────────────────────────────────────────
-  problem-service:
-    build: ./backend/services/problem-service
-    image: nikuku/algonote-problem-service:latest
-    container_name: algonote-problem-service
-    command: sh -c "sleep 25 && node --dns-result-order=ipv4first server.js"
-    ports:
-      - "5003:5003"
-    environment:
-      - PORT=5003
-    env_file:
-      - .env
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    networks:
-      - algonote-net
-
-  # ── AI Service ────────────────────────────────────────────────────────────────
-  ai-service:
-    build: ./backend/services/ai-service
-    image: nikuku/algonote-ai-service:latest
-    container_name: algonote-ai-service
-    ports:
-      - "5004:5004"
-    environment:
-      - PORT=5004
-    env_file:
-      - ./backend/services/ai-service/.env
-    networks:
-      - algonote-net
-
-  # ── YouTube Playlist Service ──────────────────────────────────────────────────
-  youtube-playlist-service:
-    build: ./backend/services/youtube-playlist-service
-    image: nikuku/algonote-youtube-playlist-service:latest
-    container_name: algonote-youtube-playlist-service
-    command: sh -c "sleep 50 && node --dns-result-order=ipv4first server.js"
-    ports:
-      - "5005:5005"
-    environment:
-      - PLAYLIST_SERVICE_PORT=5005
-      - FILE_SERVICE_URL=http://file-service:5002
-      - PROBLEM_SERVICE_URL=http://problem-service:5003
-    env_file:
-      - .env
-      - ./backend/services/youtube-playlist-service/.env
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    networks:
-      - algonote-net
-
-  # ── Profile Analysis Service ──────────────────────────────────────────────────
-  profile-analysis-service:
-    build: ./backend/services/profile-analysis-service
-    image: nikuku/algonote-profile-analysis-service:latest
-    container_name: algonote-profile-analysis-service
-    ports:
-      - "5006:5006"
-    environment:
-      - PROFILE_SERVICE_PORT=5006
-      - MONGO_URI=mongodb://mongodb:27017/algonote
-      - FILE_SERVICE_URL=http://file-service:5002
-    depends_on:
-      - mongodb
-      - file-service
-    networks:
-      - algonote-net
-
-networks:
-  algonote-net:
-    driver: bridge
+      - "80:80"
 
 volumes:
   mongo-data:

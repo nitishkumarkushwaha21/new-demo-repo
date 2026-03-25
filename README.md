@@ -1,123 +1,129 @@
 # AlgoNote AI
 
-A full-stack DSA revision platform that helps you:
+AlgoNote AI is a full-stack DSA revision platform that combines problem solving, note taking, playlist-to-sheet generation, and profile-guided practice inside one workspace.
 
-- Organize problems like a mini IDE
-- Import real LeetCode questions in seconds
-- Write brute/better/optimal approaches side-by-side
-- Build structured revision sheets from YouTube playlists
-- Analyze your profile and weak areas
+## Highlights
 
----
+- IDE-style workspace for DSA files and folders
+- Rich per-problem editor for brute/better/optimal approaches
+- One-click LeetCode import (metadata + statement + starter snippets)
+- YouTube playlist to revision sheet pipeline
+- Profile analysis with weak-area recommendations
+- Auth-aware, user-scoped API usage via gateway
 
-## Why AlgoNote
+## Why This Project
 
-Most people use scattered tools for prep: browser tabs, notes apps, spreadsheets, random repos.
-AlgoNote brings everything into one workflow:
+Interview prep tools are usually fragmented: browser tabs, notes apps, random docs, and spreadsheets.
 
-1. Discover problems
-2. Solve and document approaches
-3. Track revision progress
-4. Generate focused practice sets
+AlgoNote AI unifies the loop:
 
----
+1. Discover questions
+2. Organize and solve
+3. Store notes and complexity analysis
+4. Generate targeted revision tasks
 
 ## Main Features
 
-### 1. Smart Problem Workspace
+### Problem Workspace
 
-- Monaco-powered code editor
-- Separate tabs for Brute, Better, Optimal
-- Per-problem notes
-- Difficulty, tags, and metadata storage
+- Monaco-based coding editor
+- Multi-solution layout: brute, better, optimal
+- Notes, tags, difficulty, and complexity fields
+- Save and revisit every problem state
 
-### 2. File Explorer Style Organization
+### Explorer-Like File System
 
-- Folder/file tree inspired by IDE explorers
-- Nested structures for topics and sheets
-- Rename, delete, and revision state management
+- Folder/file hierarchy like an IDE sidebar
+- Topic-wise and sheet-wise structuring
+- Rename, delete, and revision-state controls
 
-### 3. LeetCode Import
+### LeetCode Import
 
-- Paste a LeetCode URL
-- Automatically fetch:
-  - Title
-  - Difficulty
-  - Description
-  - Starter code snippets
-  - Topic tags
+- Input a LeetCode URL
+- Auto-fetches title, slug, difficulty, description, tags, and starter code
+- Persists imported content directly into your problem record
 
-### 4. YouTube Playlist to Revision Sheet
+### YouTube Playlist to Sheet
 
-- Paste a playlist URL
-- System maps each video to likely LeetCode problems
-- Creates a structured sheet with links and metadata
-- One-click import into explorer as ready-to-practice files
+- Import playlist videos
+- Match videos to LeetCode problems using deterministic + AI-assisted mapping
+- Store generated sheet in database
+- Add full sheet to workspace as files in one action
 
-### 5. Profile Analysis and Recommendations
+### Profile Analysis
 
-- Analyze LeetCode profile stats
-- Highlight weak areas
-- Generate topic-wise recommendations
-- Import weak-area questions directly into explorer
+- Fetch LeetCode public profile stats
+- Generate recommendations by weak area
+- Import weak-area questions into workspace structure
 
-### 6. Auth + User-Scoped Data
+### Auth and Request Context
 
-- Clerk-based authentication in frontend
-- Token-based API calls
-- User-aware file tree loading
+- Clerk on frontend and gateway
+- Gateway forwards authenticated user context to downstream services
+- Data operations are scoped through API context
 
----
-
-## System Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
-    C[Client - React + Vite] --> G[API Gateway :5001]
+    FE[Client\nReact + Vite] --> GW[Gateway\n:5001]
 
-    G --> F[File Service :5002]
-    G --> P[Problem Service :5003]
-    G --> A[AI Service :5004]
-    G --> Y[YouTube Playlist Service :5005]
-    G --> R[Profile Analysis Service :5006]
+    GW --> US[Unified Service\nFiles + Problems + AI\n:5007]
+    GW --> YS[YouTube Playlist Service\n:5005]
+    GW --> PS[Profile Analysis Service\n:5006]
 
-    F --> PG[(PostgreSQL)]
-    P --> PG
-    Y --> PG
+    US --> PG[(PostgreSQL)]
+    YS --> PG
+    PS --> MG[(MongoDB)]
 
-    R --> MG[(MongoDB)]
-
-    P --> LC[LeetCode GraphQL]
-    Y --> YT[YouTube Data API]
-    Y --> OR[OpenRouter / LLM]
-    R --> LC
+    US --> LC[LeetCode GraphQL]
+    YS --> YT[YouTube Data API]
+    YS --> OR[OpenRouter]
+    PS --> LC
 ```
 
----
+## Request Routing Overview
 
-## Key User Flows
+```mermaid
+flowchart TD
+    A[/api/files] --> G[Gateway]
+    B[/api/problems] --> G
+    C[/api/ai] --> G
+    D[/api/youtube-playlist] --> G
+    E[/api/profile-analysis] --> G
 
-### Flow A: Import LeetCode Problem
+    G --> U[Unified Service]
+    G --> Y[YouTube Playlist Service]
+    G --> P[Profile Analysis Service]
+
+    U --> U1[files routes]
+    U --> U2[problem routes]
+    U --> U3[ai routes]
+```
+
+## Core Flows
+
+### 1) LeetCode URL Import
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant FE as Frontend
     participant GW as Gateway
-    participant PS as Problem Service
+    participant US as Unified Service
     participant LC as LeetCode API
 
-    U->>FE: Paste LeetCode URL
+    U->>FE: Paste problem URL
     FE->>GW: POST /api/problems/import
-    GW->>PS: Forward request
-    PS->>LC: Query by titleSlug
-    LC-->>PS: Problem payload
-    PS-->>FE: Normalized data
+    GW->>US: Forward request
+    US->>LC: Query by titleSlug
+    LC-->>US: Problem payload
+    US-->>FE: Normalized metadata
     FE->>GW: PUT /api/problems/:fileId
-    GW->>PS: Save problem details
+    GW->>US: Persist problem details
 ```
 
-### Flow B: YouTube Playlist to Explorer
+### 2) Playlist Import and Add to Workspace
 
 ```mermaid
 sequenceDiagram
@@ -127,30 +133,50 @@ sequenceDiagram
     participant YS as Playlist Service
     participant YT as YouTube API
     participant OR as OpenRouter
-    participant PS as Problem Service
-    participant FS as File Service
+    participant US as Unified Service
 
     U->>FE: Submit playlist URL
     FE->>GW: POST /api/youtube-playlist/import
     GW->>YS: Forward request
-    YS->>YT: Fetch playlist videos
-    YS->>OR: Map video titles to LeetCode slugs
-    YS->>PS: Fetch full problem data
-    YS-->>FE: Sheet with matched problems
-    U->>FE: Click Add to Explorer
+    YS->>YT: Fetch videos
+    YS->>OR: Resolve likely LeetCode matches
+    YS-->>FE: Generated sheet
+
+    U->>FE: Add sheet to workspace
     FE->>GW: POST /api/youtube-playlist/sheet/:id/create-folder
-    GW->>YS: Create folder flow
-    YS->>FS: Create folder/files
-    YS->>PS: Populate problem content
+    GW->>YS: Create workspace folder/files
+    YS->>US: POST /api/files (folder + files)
+    YS->>US: PUT /api/problems/:fileId (populate content)
+    YS-->>FE: Import success
 ```
 
----
+### 3) Profile Analysis to Recommendations
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant GW as Gateway
+    participant PA as Profile Analysis Service
+    participant LC as LeetCode API
+
+    U->>FE: Enter username
+    FE->>GW: GET /api/profile-analysis/:username
+    GW->>PA: Forward request
+    PA->>LC: Fetch public stats
+    LC-->>PA: Profile numbers
+    PA-->>FE: Analysis response
+
+    FE->>GW: POST /api/profile-analysis/recommendations
+    GW->>PA: Build topic-wise suggestions
+    PA-->>FE: Curated recommendations
+```
 
 ## Tech Stack
 
 ### Frontend
 
-- React (Vite)
+- React 19 + Vite
 - React Router
 - Zustand
 - Tailwind CSS
@@ -161,148 +187,126 @@ sequenceDiagram
 
 ### Backend
 
-- Node.js + Express microservices
-- API Gateway with proxy routing
-- Sequelize + PostgreSQL
-- Mongoose + MongoDB
-- Service-to-service HTTP with Axios
+- Node.js + Express
+- API Gateway with proxy middleware
+- Unified service for files, problems, and AI endpoints
+- Playlist service for YouTube ingestion and matching
+- Profile analysis service for stats and recommendations
+- Sequelize (PostgreSQL) + Mongoose (MongoDB)
 
 ### External Integrations
 
-- LeetCode GraphQL API
+- LeetCode GraphQL
 - YouTube Data API v3
-- OpenRouter (LLM model routing)
+- OpenRouter
 
----
-
-## Repository Layout
+## Repository Structure
 
 ```text
 .
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── store/
-├── backend/
-│   ├── gateway/
-│   └── services/
-│       ├── file-service/
-│       ├── problem-service/
-│       ├── ai-service/
-│       ├── youtube-playlist-service/
-│       └── profile-analysis-service/
-├── docker-compose.yml
-└── start-backend.ps1
+|- client/
+|  |- src/
+|  |  |- components/
+|  |  |- pages/
+|  |  |- services/
+|  |  `- store/
+|- backend/
+|  |- gateway/
+|  `- services/
+|     |- unified-service/
+|     |- youtube-playlist-service/
+|     `- profile-analysis-service/
+|- docker-compose.yml
+|- start-backend.ps1
+`- README.md
 ```
 
----
+## Local Development
 
-## Quick Start
-
-### 1. Install dependencies
+### 1) Install dependencies
 
 ```bash
 npm install
-cd client && npm install
-cd ../backend/gateway && npm install
-cd ../services/file-service && npm install
-cd ../problem-service && npm install
-cd ../ai-service && npm install
-cd ../youtube-playlist-service && npm install
-cd ../profile-analysis-service && npm install
+npm install --prefix client
+npm install --prefix backend
+npm install --prefix backend/gateway
+npm install --prefix backend/services/unified-service
+npm install --prefix backend/services/youtube-playlist-service
+npm install --prefix backend/services/profile-analysis-service
 ```
 
-### 2. Configure environment
+### 2) Configure environment
 
-Create required `.env` files for:
+```bash
+cp .env.example .env
+```
 
-- database credentials
-- API keys (LeetCode/OpenRouter/YouTube/OpenAI/Clerk as applicable)
+Fill required variables in root `.env`:
 
-### 3. Run locally
+- `DATABASE_URL`
+- `OPENAI_API_KEY` (or OpenRouter-compatible key)
+- `YOUTUBE_API_KEY`
+- `MONGO_URI`
+- `CLERK_SECRET_KEY`
+- `VITE_CLERK_PUBLISHABLE_KEY`
 
-Backend (all services):
+### 3) Run backend services
+
+From repo root:
 
 ```bash
 npm run start:backend
 ```
 
-Frontend:
+### 4) Run frontend
 
 ```bash
-cd client
-npm run dev
+npm run dev --prefix client
 ```
 
----
+## Docker Deployment
 
-## Docker (Updated)
-
-### Local Docker Build
-
-Use this when you want to build images from source on your machine:
+Build and start all services:
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-### AWS/Production Docker Run
-
-Use the prebuilt image compose file for server deployment:
+Update stack after changes:
 
 ```bash
-docker compose -f docker-compose.aws.yml up -d
+docker compose pull
+docker compose up -d --remove-orphans
 ```
 
-The AWS compose file is image-only and uses restart policies for stable long-running environments.
-
-### Services in Docker Stack
+Included containers:
 
 - client
 - gateway
-- file-service
-- problem-service
-- ai-service
+- unified-service
 - youtube-playlist-service
 - profile-analysis-service
 - mongodb
 
----
+## EC2 Quick Deploy
 
-## AWS Deployment (EC2)
-
-This repo now includes an EC2-oriented deployment path:
-
-- `deploy/aws/ec2/setup-ec2.sh` - one-time Docker + Compose installation on Ubuntu EC2
-- `deploy/aws/ec2/deploy.sh` - pull latest images and redeploy services
-- `.github/workflows/deploy-aws-ec2.yml` - optional GitHub Actions deployment over SSH
-
-### 1. Launch EC2
-
-Recommended:
+### 1) Provision
 
 - Ubuntu 22.04 LTS
-- t3.large or above
-- 30GB+ storage
+- 30 GB+ disk
+- Open ports: 22, 80, 443 (if TLS enabled)
 
-Security group inbound:
-
-- 22 (SSH)
-- 80 (HTTP)
-- 443 (HTTPS, if TLS is configured)
-
-### 2. Prepare Server
+### 2) Install runtime tools
 
 ```bash
-chmod +x deploy/aws/ec2/setup-ec2.sh
-./deploy/aws/ec2/setup-ec2.sh
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker $USER
 ```
 
-Then log out and log in again so docker group permissions apply.
+Reconnect SSH once after adding Docker group.
 
-### 3. Clone + Configure
+### 3) Clone and configure
 
 ```bash
 sudo mkdir -p /opt/algonote
@@ -311,65 +315,46 @@ cd /opt/algonote
 git clone <your-repo-url> .
 ```
 
-Create required env files on the server:
+Create root `.env` with production values.
 
-- root `.env`
-- `backend/services/ai-service/.env`
-- `backend/services/youtube-playlist-service/.env`
-
-### 4. Deploy Containers
+### 4) Start
 
 ```bash
-chmod +x deploy/aws/ec2/deploy.sh
-./deploy/aws/ec2/deploy.sh
+docker compose pull
+docker compose up -d --remove-orphans
 ```
 
-### 5. Verify
+### 5) Verify
 
 ```bash
-docker compose -f docker-compose.aws.yml ps
-docker compose -f docker-compose.aws.yml logs -f gateway
+docker compose ps
+docker compose logs -f gateway
 ```
 
-### 6. Optional CI/CD via GitHub Actions
+## API Surface (High Level)
 
-If you use `.github/workflows/deploy-aws-ec2.yml`, configure these repo secrets:
+- `GET /api/files`
+- `POST /api/files`
+- `PUT /api/files/:id`
+- `DELETE /api/files/:id`
+- `GET /api/problems/:fileId`
+- `PUT /api/problems/:fileId`
+- `POST /api/problems/import`
+- `POST /api/ai/analyze`
+- `POST /api/youtube-playlist/import`
+- `GET /api/youtube-playlist/sheets`
+- `GET /api/youtube-playlist/sheet/:id`
+- `POST /api/youtube-playlist/sheet/:id/create-folder`
+- `GET /api/profile-analysis/:username`
+- `POST /api/profile-analysis/recommendations`
+- `POST /api/profile-analysis/import-weak-areas`
 
-- `AWS_EC2_HOST`
-- `AWS_EC2_USER`
-- `AWS_EC2_SSH_KEY`
+## Troubleshooting
 
-Deployment workflow behavior:
+- Backend exits with `EADDRINUSE`: a service port is already occupied. Free the port or change service port env values.
+- Playlist import succeeds but add-to-workspace fails: verify `UNIFIED_SERVICE_URL`, `FILE_SERVICE_URL`, and `PROBLEM_SERVICE_URL` are reachable from playlist service runtime.
+- Missing auth behavior: ensure `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` are correctly set.
 
-- Trigger on push to `main` or manual dispatch
-- SSH into EC2
-- Pull latest code
-- Run deploy script
+## Vision
 
----
-
-## API Overview
-
-- `GET /api/files` - Fetch file tree
-- `POST /api/files` - Create file/folder
-- `GET /api/problems/:fileId` - Get problem content
-- `PUT /api/problems/:fileId` - Update problem content
-- `POST /api/problems/import` - Import from LeetCode URL
-- `POST /api/ai/*` - AI operations
-- `POST /api/youtube-playlist/import` - Import playlist
-- `POST /api/youtube-playlist/sheet/:id/create-folder` - Push sheet to explorer
-- `GET /api/profile-analysis/:username` - Analyze profile
-- `POST /api/profile-analysis/recommendations` - Topic recommendations
-
----
-
-## Current Direction
-
-This project is evolving into a complete interview-prep operating system:
-
-- structured practice generation
-- integrated solving and note-taking
-- feedback loops from profile analytics
-- one-click revision workflows
-
-If you are preparing for coding interviews consistently, this setup is built to reduce friction and improve repetition quality.
+AlgoNote AI is moving toward an interview-prep operating system where discovery, solving, revision, and feedback loops live in one place with minimal context switching.

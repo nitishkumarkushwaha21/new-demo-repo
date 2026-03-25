@@ -1,5 +1,43 @@
 import { create } from "zustand";
 import { fileService } from "../services/api";
+import { findTreeNode, removeTreeNode, updateTreeNode } from "../utils/fileTree";
+
+const FILE_SYSTEM_RETRY_DELAYS_MS = [400, 1200, 2500];
+let loadFileSystemPromise = null;
+
+const defaultSolutionEntries = () => [
+  {
+    id: "optimal",
+    label: "Optimal",
+    code: "",
+  },
+];
+
+const normalizeSolutionEntries = (item = {}) => {
+  if (Array.isArray(item.solutionEntries) && item.solutionEntries.length > 0) {
+    return item.solutionEntries;
+  }
+
+  const legacyEntries = [
+    { id: "brute", label: "Brute Force", code: item.solutions?.brute || "" },
+    { id: "better", label: "Better", code: item.solutions?.better || "" },
+    { id: "optimal", label: "Optimal", code: item.solutions?.optimal || "" },
+  ].filter((entry) => entry.code);
+
+  return legacyEntries.length > 0 ? legacyEntries : defaultSolutionEntries();
+};
+
+const wait = (delay) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
+
+const shouldRetryFileSystemLoad = (error) => {
+  const status = error?.response?.status;
+  const code = error?.code;
+
+  return status === 502 || code === "ERR_NETWORK" || code === "ECONNABORTED";
+};
 
 const useFileStore = create((set, get) => ({
   fileSystem: [], // Initially empty, loaded from API
@@ -7,6 +45,7 @@ const useFileStore = create((set, get) => ({
   expandedFolders: [],
   isLoading: false,
   error: null,
+  hasLoadedFileSystem: false,
 
   resetForUser: () =>
     set({
@@ -15,28 +54,70 @@ const useFileStore = create((set, get) => ({
       expandedFolders: [],
       isLoading: false,
       error: null,
+      hasLoadedFileSystem: false,
     }),
 
   // Fetch initial file tree
-  loadFileSystem: async () => {
+  loadFileSystem: async ({ force = false } = {}) => {
+    if (loadFileSystemPromise) {
+      return loadFileSystemPromise;
+    }
+
+    if (!force) {
+      const { hasLoadedFileSystem, isLoading } = get();
+      if (hasLoadedFileSystem || isLoading) {
+        return hasLoadedFileSystem;
+      }
+    }
+
     set({ isLoading: true, error: null });
-    try {
-      const response = await fileService.getFileSystem();
-      set({
-        fileSystem: Array.isArray(response.data) ? response.data : [],
-        isLoading: false,
-      });
-      return true;
-    } catch (error) {
-      const message = error.response?.data?.message || error.message;
+
+    loadFileSystemPromise = (async () => {
+      let lastError = null;
+
+      for (let attempt = 0; attempt <= FILE_SYSTEM_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+          const response = await fileService.getFileSystem();
+          set({
+            fileSystem: Array.isArray(response.data) ? response.data : [],
+            isLoading: false,
+            error: null,
+            hasLoadedFileSystem: true,
+          });
+          return true;
+        } catch (error) {
+          lastError = error;
+          if (
+            attempt === FILE_SYSTEM_RETRY_DELAYS_MS.length ||
+            !shouldRetryFileSystemLoad(error)
+          ) {
+            break;
+          }
+
+          await wait(FILE_SYSTEM_RETRY_DELAYS_MS[attempt]);
+        }
+      }
+
+      const message =
+        lastError?.response?.data?.message ||
+        lastError?.message ||
+        "Failed to load file system.";
+
       set({
         fileSystem: [],
         activeFileId: null,
         error: message,
         isLoading: false,
+        hasLoadedFileSystem: false,
       });
-      console.error("Failed to load file system", error);
+      console.error("Failed to load file system", lastError);
       return false;
+    })();
+
+    try {
+      return await loadFileSystemPromise;
+    } finally {
+      loadFileSystemPromise = null;
     }
   },
 
@@ -47,41 +128,22 @@ const useFileStore = create((set, get) => ({
     // However, our getFileSystem might be shallow? Use getProblem for details.
 
     // Find file type
-    const findFile = (items) => {
-      for (const item of items) {
-        if (item.id == fileId) return item;
-        if (item.children) {
-          const found = findFile(item.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const file = findFile(get().fileSystem);
+    const file = findTreeNode(get().fileSystem, fileId);
     if (file && file.type === "file") {
       // Always fetch full problem details to ensure we have latest data
       try {
         const res = await fileService.getProblem(fileId);
         // Merge problem details into store
-        const updateRecursive = (items) =>
-          items.map((item) => {
-            if (item.id == fileId) {
-              return {
-                ...item,
-                ...res.data,
-                // Ensure we preserve the file metadata
-                id: item.id,
-                name: item.name,
-                type: item.type,
-                parentId: item.parentId,
-              };
-            }
-            if (item.children)
-              return { ...item, children: updateRecursive(item.children) };
-            return item;
-          });
-        set((state) => ({ fileSystem: updateRecursive(state.fileSystem) }));
+        set((state) => ({
+          fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+            ...item,
+            ...res.data,
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            parentId: item.parentId,
+          })),
+        }));
         console.log("✅ Problem data refreshed for file:", fileId);
       } catch (err) {
         console.error("Failed to load problem details", err);
@@ -145,19 +207,7 @@ const useFileStore = create((set, get) => ({
   deleteItem: async (itemId) => {
     try {
       await fileService.deleteFileNode(itemId);
-      set((state) => {
-        const deleteRecursive = (items) => {
-          return items
-            .filter((item) => item.id !== itemId)
-            .map((item) => {
-              if (item.children) {
-                return { ...item, children: deleteRecursive(item.children) };
-              }
-              return item;
-            });
-        };
-        return { fileSystem: deleteRecursive(state.fileSystem) };
-      });
+      set((state) => ({ fileSystem: removeTreeNode(state.fileSystem, itemId) }));
     } catch (error) {
       console.error("Failed to delete item", error);
     }
@@ -167,30 +217,27 @@ const useFileStore = create((set, get) => ({
   updateFileContent: async (fileId, solutionType, newContent) => {
     // Optimistic update
     set((state) => {
-      const updateRecursive = (items) => {
-        return items.map((item) => {
-          if (item.id == fileId) {
-            return {
-              ...item,
-              solutions: {
-                ...item.solutions,
-                [solutionType]: newContent,
-              },
-            };
-          }
-          if (item.children) {
-            return { ...item, children: updateRecursive(item.children) };
-          }
-          return item;
-        });
+      return {
+        fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+          ...item,
+          solutionEntries: normalizeSolutionEntries(item).map((entry) =>
+            entry.id === solutionType ? { ...entry, code: newContent } : entry,
+          ),
+          solutions: {
+            ...item.solutions,
+            [solutionType]: newContent,
+          },
+        })),
       };
-      return { fileSystem: updateRecursive(state.fileSystem) };
     });
 
     // Debounced API call appropriate here, but for now direct call
     try {
       await fileService.updateProblem(fileId, {
-        solutions: { [solutionType]: newContent },
+        solutionEntries: normalizeSolutionEntries(findTreeNode(get().fileSystem, fileId)).map(
+          (entry) =>
+            entry.id === solutionType ? { ...entry, code: newContent } : entry,
+        ),
       });
     } catch (error) {
       console.error("Failed to save content", error);
@@ -200,18 +247,12 @@ const useFileStore = create((set, get) => ({
   updateFileNotes: async (fileId, notes) => {
     // Optimistic
     set((state) => {
-      const updateRecursive = (items) => {
-        return items.map((item) => {
-          if (item.id == fileId) {
-            return { ...item, notes };
-          }
-          if (item.children) {
-            return { ...item, children: updateRecursive(item.children) };
-          }
-          return item;
-        });
+      return {
+        fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+          ...item,
+          notes,
+        })),
       };
-      return { fileSystem: updateRecursive(state.fileSystem) };
     });
 
     await fileService.updateProblem(fileId, { notes });
@@ -220,18 +261,12 @@ const useFileStore = create((set, get) => ({
   updateFileLink: async (fileId, link) => {
     // Optimistic
     set((state) => {
-      const updateRecursive = (items) => {
-        return items.map((item) => {
-          if (item.id == fileId) {
-            return { ...item, link };
-          }
-          if (item.children) {
-            return { ...item, children: updateRecursive(item.children) };
-          }
-          return item;
-        });
+      return {
+        fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+          ...item,
+          link,
+        })),
       };
-      return { fileSystem: updateRecursive(state.fileSystem) };
     });
 
     await fileService.updateFileNode(fileId, { link });
@@ -240,42 +275,98 @@ const useFileStore = create((set, get) => ({
   updateFileAnalysis: async (fileId, analysis) => {
     // Optimistic
     set((state) => {
-      const updateRecursive = (items) => {
-        return items.map((item) => {
-          if (item.id == fileId) {
-            return { ...item, analysis };
-          }
-          if (item.children) {
-            return { ...item, children: updateRecursive(item.children) };
-          }
-          return item;
-        });
+      return {
+        fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+          ...item,
+          analysis,
+        })),
       };
-      return { fileSystem: updateRecursive(state.fileSystem) };
     });
 
     await fileService.updateProblem(fileId, { analysis });
   },
 
+  mergeProblemDetails: (fileId, details) =>
+    set((state) => ({
+      fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+        ...item,
+        ...details,
+        solutionEntries:
+          details.solutionEntries ?? item.solutionEntries ?? defaultSolutionEntries(),
+        analysis: {
+          time: details.analysis?.time ?? item.analysis?.time ?? "",
+          space: details.analysis?.space ?? item.analysis?.space ?? "",
+          explanation:
+            details.analysis?.explanation ??
+            item.analysis?.explanation ??
+            "",
+        },
+        solutions: {
+          brute: details.solutions?.brute ?? item.solutions?.brute ?? "",
+          better: details.solutions?.better ?? item.solutions?.better ?? "",
+          optimal: details.solutions?.optimal ?? item.solutions?.optimal ?? "",
+        },
+      })),
+    })),
+
+  updateFileFlags: async (fileId, flags) => {
+    set((state) => ({
+      fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+        ...item,
+        ...flags,
+      })),
+    }));
+
+    await fileService.updateFileNode(fileId, flags);
+  },
+
   toggleFileRevision: async (fileId) => {
-    // ... (existing code)
+    const current = findTreeNode(get().fileSystem, fileId);
+    if (!current) {
+      return;
+    }
+
+    await get().updateFileFlags(fileId, { isRevised: !current.isRevised });
+  },
+
+  toggleFileSolved: async (fileId) => {
+    const current = findTreeNode(get().fileSystem, fileId);
+    if (!current) {
+      return;
+    }
+
+    await get().updateFileFlags(fileId, { isSolved: !current.isSolved });
+  },
+
+  toggleFileImportant: async (fileId) => {
+    const current = findTreeNode(get().fileSystem, fileId);
+    if (!current) {
+      return;
+    }
+
+    await get().updateFileFlags(fileId, { isImportant: !current.isImportant });
+  },
+
+  updateSolutionEntries: async (fileId, solutionEntries) => {
+    set((state) => ({
+      fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+        ...item,
+        solutionEntries,
+      })),
+    }));
+
+    await fileService.updateProblem(fileId, { solutionEntries });
   },
 
   renameItem: async (fileId, newName) => {
     // Optimistic
     set((state) => {
-      const updateRecursive = (items) => {
-        return items.map((item) => {
-          if (item.id == fileId) {
-            return { ...item, name: newName };
-          }
-          if (item.children) {
-            return { ...item, children: updateRecursive(item.children) };
-          }
-          return item;
-        });
+      return {
+        fileSystem: updateTreeNode(state.fileSystem, fileId, (item) => ({
+          ...item,
+          name: newName,
+        })),
       };
-      return { fileSystem: updateRecursive(state.fileSystem) };
     });
 
     await fileService.updateFileNode(fileId, { name: newName });

@@ -13,6 +13,11 @@ const LearningSheet = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    userId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: "legacy",
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false,

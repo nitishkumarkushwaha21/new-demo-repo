@@ -17,18 +17,18 @@ router.post("/recommendations", express.json(), getRecommendations);
 // POST /api/profile-analysis/import-weak-areas
 router.post("/import-weak-areas", express.json(), importWeakAreas);
 
-// Profile analysis (LeetCode stats fetch)
-// GET /api/profile-analysis/:username
-router.get("/:username", analyzeProfile);
-
 // Revision CRUD
 // POST /api/profile-analysis/revision
-router.post("/revision", addRevision);
+router.post("/revision", express.json(), addRevision);
 
 // GET /api/profile-analysis/revision/:username
 router.get("/revision/:username", getRevisions);
 
 // DELETE /api/profile-analysis/revision/:id
 router.delete("/revision/:id", deleteRevision);
+
+// Profile analysis (LeetCode stats fetch)
+// GET /api/profile-analysis/:username
+router.get("/:username", analyzeProfile);
 
 module.exports = router;

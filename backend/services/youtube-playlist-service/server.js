@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const sequelize = require("./src/config/database");
+require("dotenv").config({ path: path.resolve(__dirname, "../../../.env") });
 require("dotenv").config();
 
 // Import models to register them with Sequelize
@@ -11,6 +13,33 @@ const playlistRoutes = require("./src/routes/playlistRoutes");
 
 const app = express();
 const PORT = process.env.PLAYLIST_SERVICE_PORT || 5005;
+const isProduction = process.env.NODE_ENV === "production";
+
+const parsedPort = Number(PORT);
+if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
+  throw new Error(`[youtube-playlist-service] Invalid port value: ${PORT}`);
+}
+
+const missingVars = ["DATABASE_URL", "YOUTUBE_API_KEY"].filter(
+  (key) => !String(process.env[key] || "").trim(),
+);
+
+if (missingVars.length > 0) {
+  throw new Error(
+    `[youtube-playlist-service] Missing required env vars: ${missingVars.join(
+      ", ",
+    )}`,
+  );
+}
+
+if (
+  !String(process.env.OPENROUTER_API_KEY || "").trim() &&
+  !String(process.env.OPENAI_API_KEY || "").trim()
+) {
+  throw new Error(
+    "[youtube-playlist-service] Missing AI API key. Set OPENROUTER_API_KEY or OPENAI_API_KEY.",
+  );
+}
 
 app.use(cors());
 app.use(express.json());
@@ -26,12 +55,24 @@ app.get("/", (req, res) => {
 const MAX_RETRIES = 10;
 const RETRY_DELAY = 8000;
 
+async function initializeDatabase() {
+  if (isProduction) {
+    await sequelize.authenticate();
+    console.log(
+      "PostgreSQL (algonote) connection verified for YouTube Playlist Service",
+    );
+    return;
+  }
+
+  await sequelize.sync({ alter: true });
+  console.log(
+    "PostgreSQL (algonote) synced - learning_sheets & sheet_problems tables ready",
+  );
+}
+
 async function startServer(attempt = 1) {
   try {
-    await sequelize.sync({ alter: true });
-    console.log(
-      "PostgreSQL (algonote) synced - learning_sheets & sheet_problems tables ready",
-    );
+    await initializeDatabase();
     app.listen(PORT, () =>
       console.log(`YouTube Playlist Service running on port ${PORT}`),
     );
