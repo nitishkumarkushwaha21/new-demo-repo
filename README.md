@@ -1,88 +1,111 @@
 # AlgoNote AI
 
-AlgoNote AI is a full-stack DSA revision platform that combines problem solving, note taking, playlist-to-sheet generation, and profile-guided practice inside one workspace.
+<div align="center">
 
-## Highlights
+### Build your DSA prep like a product, not a pile of tabs.
 
-- IDE-style workspace for DSA files and folders
-- Rich per-problem editor for brute/better/optimal approaches
-- One-click LeetCode import (metadata + statement + starter snippets)
-- YouTube playlist to revision sheet pipeline
-- Profile analysis with weak-area recommendations
-- Auth-aware, user-scoped API usage via gateway
+Personal interview preparation workspace with structured problem solving, playlist-to-sheet generation, profile-guided recommendations, and revision-first workflows.
 
-## Why This Project
+![Status](https://img.shields.io/badge/status-active%20development-0f766e)
+![Architecture](https://img.shields.io/badge/architecture-microservices-1d4ed8)
+![Frontend](https://img.shields.io/badge/frontend-react%2019%20%2B%20vite-15803d)
+![Gateway](https://img.shields.io/badge/auth-clerk%20protected-f59e0b)
+![Deployment](https://img.shields.io/badge/deploy-docker%20compose-1f2937)
 
-Interview prep tools are usually fragmented: browser tabs, notes apps, random docs, and spreadsheets.
+</div>
 
-AlgoNote AI unifies the loop:
+---
 
-1. Discover questions
-2. Organize and solve
-3. Store notes and complexity analysis
-4. Generate targeted revision tasks
+## Why this project exists
 
-## Main Features
+Most interview prep feels fragmented: coding in one place, notes in another, playlists in another, and revision tracking in random docs.
 
-### Problem Workspace
+AlgoNote AI combines everything into one product workflow:
 
-- Monaco-based coding editor
-- Multi-solution layout: brute, better, optimal
-- Notes, tags, difficulty, and complexity fields
-- Save and revisit every problem state
+1. Collect problems from LeetCode, GFG, pasted lists, and YouTube playlists.
+2. Organize them in an IDE-style explorer.
+3. Solve with brute, better, and optimal approaches.
+4. Save notes, complexity, source metadata, and revision state.
+5. Build targeted revision folders from weak areas.
 
-### Explorer-Like File System
+---
 
-- Folder/file hierarchy like an IDE sidebar
-- Topic-wise and sheet-wise structuring
-- Rename, delete, and revision-state controls
+## Core product features
 
-### LeetCode Import
+## 1) Workspace-style DSA explorer
+- Nested folder and file hierarchy like a coding IDE.
+- Fast add, rename, delete, and status toggles.
+- Folder views with search and revision controls.
 
-- Input a LeetCode URL
-- Auto-fetches title, slug, difficulty, description, tags, and starter code
-- Persists imported content directly into your problem record
+## 2) Rich problem editor
+- Dedicated problem page with metadata, notes, and coding tabs.
+- Separate fields for brute, better, and optimal solutions.
+- Complexity analysis fields and AI-assisted complexity endpoint.
 
-### YouTube Playlist to Sheet
+## 3) LeetCode and GFG imports
+- Import LeetCode problem content from URL.
+- Import GFG problem content from URL.
+- Persist problem source, tags, snippets, and descriptions.
 
-- Import playlist videos
-- Match videos to LeetCode problems using deterministic + AI-assisted mapping
-- Store generated sheet in database
-- Add full sheet to workspace as files in one action
+## 4) YouTube playlist to revision sheet
+- Parse playlist videos via YouTube API.
+- Match videos to LeetCode problems with OpenRouter model inference.
+- Save generated sheet with confidence score and metadata.
+- One-click add generated sheet into workspace folders/files.
 
-### Profile Analysis
+## 5) Profile analysis and recommendation engine
+- Fetch LeetCode profile stats by username.
+- Build recommendations by weak topics.
+- Import weak area recommendations directly to explorer structure.
+- Store user revision history in MongoDB.
 
-- Fetch LeetCode public profile stats
-- Generate recommendations by weak area
-- Import weak-area questions into workspace structure
+## 6) Revision list parser
+- Paste raw text list from LeetCode/GFG/mixed sources.
+- Parse into structured problem objects.
+- Create workspace folders from parsed revision lists.
 
-### Auth and Request Context
+## 7) Authentication and user-scoped requests
+- Clerk-protected frontend and gateway.
+- Gateway forwards user context to downstream services.
+- Development fallback mode supported when explicitly enabled.
 
-- Clerk on frontend and gateway
-- Gateway forwards authenticated user context to downstream services
-- Data operations are scoped through API context
+---
 
-## Architecture
+## Product architecture
 
 ```mermaid
 flowchart LR
-    FE[Client\nReact + Vite] --> GW[Gateway\n:5001]
+    FE[Client\nReact + Vite] --> GW[Gateway\nPort 5001]
 
-    GW --> US[Unified Service\nFiles + Problems + AI\n:5007]
-    GW --> YS[YouTube Playlist Service\n:5005]
-    GW --> PS[Profile Analysis Service\n:5006]
+    GW --> US[Unified Service\nFiles + Problems + AI\nPort 5007]
+    GW --> YS[YouTube Playlist Service\nPort 5005]
+    GW --> PS[Profile Analysis Service\nPort 5006]
 
     US --> PG[(PostgreSQL)]
     YS --> PG
     PS --> MG[(MongoDB)]
 
-    US --> LC[LeetCode GraphQL]
+    US --> LC[LeetCode APIs]
     YS --> YT[YouTube Data API]
-    YS --> OR[OpenRouter]
+    YS --> OR[OpenRouter API]
     PS --> LC
 ```
 
-## Request Routing Overview
+---
+
+## Service map
+
+| Service | Port | Responsibility |
+|---|---:|---|
+| Gateway | 5001 | Auth, request proxying, upstream routing |
+| Unified Service | 5007 | File tree, problem CRUD, LeetCode/GFG/list import, AI analyze |
+| YouTube Playlist Service | 5005 | Playlist ingestion, AI matching, sheet CRUD, create folder from sheet |
+| Profile Analysis Service | 5006 | LeetCode stats, recommendations, revision tracking, weak-area import |
+| Client | 80 (container) | Product UI |
+
+---
+
+## Routing overview
 
 ```mermaid
 flowchart TD
@@ -95,15 +118,13 @@ flowchart TD
     G --> U[Unified Service]
     G --> Y[YouTube Playlist Service]
     G --> P[Profile Analysis Service]
-
-    U --> U1[files routes]
-    U --> U2[problem routes]
-    U --> U3[ai routes]
 ```
 
-## Core Flows
+---
 
-### 1) LeetCode URL Import
+## End-to-end feature flows
+
+### LeetCode import flow
 
 ```mermaid
 sequenceDiagram
@@ -113,17 +134,17 @@ sequenceDiagram
     participant US as Unified Service
     participant LC as LeetCode API
 
-    U->>FE: Paste problem URL
+    U->>FE: Paste LeetCode URL
     FE->>GW: POST /api/problems/import
-    GW->>US: Forward request
-    US->>LC: Query by titleSlug
+    GW->>US: Forward request + user context
+    US->>LC: Fetch problem by slug
     LC-->>US: Problem payload
     US-->>FE: Normalized metadata
     FE->>GW: PUT /api/problems/:fileId
-    GW->>US: Persist problem details
+    GW->>US: Persist imported content
 ```
 
-### 2) Playlist Import and Add to Workspace
+### YouTube playlist to workspace flow
 
 ```mermaid
 sequenceDiagram
@@ -138,69 +159,155 @@ sequenceDiagram
     U->>FE: Submit playlist URL
     FE->>GW: POST /api/youtube-playlist/import
     GW->>YS: Forward request
-    YS->>YT: Fetch videos
-    YS->>OR: Resolve likely LeetCode matches
-    YS-->>FE: Generated sheet
+    YS->>YT: Fetch playlist videos
+    YS->>OR: Identify matching LeetCode problems
+    YS-->>FE: Generated sheet saved
 
-    U->>FE: Add sheet to workspace
+    U->>FE: Add sheet to explorer
     FE->>GW: POST /api/youtube-playlist/sheet/:id/create-folder
-    GW->>YS: Create workspace folder/files
-    YS->>US: POST /api/files (folder + files)
-    YS->>US: PUT /api/problems/:fileId (populate content)
-    YS-->>FE: Import success
+    GW->>YS: Create folder pipeline
+    YS->>US: Create folder and files
+    YS->>US: Populate each problem
+    YS-->>FE: Completed
 ```
 
-### 3) Profile Analysis to Recommendations
+### Profile analysis and weak-area import
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant FE as Frontend
     participant GW as Gateway
-    participant PA as Profile Analysis Service
+    participant PS as Profile Analysis Service
     participant LC as LeetCode API
+    participant US as Unified Service
 
-    U->>FE: Enter username
+    U->>FE: Enter LeetCode username
     FE->>GW: GET /api/profile-analysis/:username
-    GW->>PA: Forward request
-    PA->>LC: Fetch public stats
-    LC-->>PA: Profile numbers
-    PA-->>FE: Analysis response
+    GW->>PS: Forward request
+    PS->>LC: Fetch user stats
+    LC-->>PS: Solved counts and profile info
+    PS-->>FE: Analysis response
 
     FE->>GW: POST /api/profile-analysis/recommendations
-    GW->>PA: Build topic-wise suggestions
-    PA-->>FE: Curated recommendations
+    GW->>PS: Build topic recommendations
+    PS-->>FE: Recommended problems
+
+    FE->>GW: POST /api/profile-analysis/import-weak-areas
+    GW->>PS: Import to explorer
+    PS->>US: Create folders/files for weak areas
 ```
 
-## Tech Stack
+---
+
+## Frontend experience
+
+Main app routes:
+
+- /sign-in and /sign-up for authentication
+- / for dashboard
+- /folder/:id for folder details
+- /problem/:id for problem workspace
+- /playlist for playlist sheets
+- /leetcode-list for revision list import
+- /profile-analysis for profile-based recommendations
+
+UI patterns:
+
+- Lazy-loaded route pages for performance.
+- Sidebar navigation with explorer tree behavior.
+- Optimistic updates in store for faster interaction.
+- Clerk-aware protected layout for product routes.
+
+---
+
+## Data model highlights
+
+## Unified Service (PostgreSQL)
+- File node entity for folder/file tree.
+- Problem detail entity linked to fileId.
+- Stores notes, metadata, solutions, complexity fields, and source context.
+
+## YouTube Playlist Service (PostgreSQL)
+- LearningSheet entity for imported playlists.
+- SheetProblem entity for per-video mapped problem rows.
+
+## Profile Analysis Service (MongoDB)
+- Revision entries per user for tracking and review.
+
+---
+
+## API surface (high level)
+
+### Unified Service via gateway
+- GET /api/files
+- POST /api/files
+- PUT /api/files/:id
+- DELETE /api/files/:id
+- GET /api/problems/:fileId
+- POST /api/problems
+- PUT /api/problems/:fileId
+- DELETE /api/problems/:fileId
+- POST /api/problems/import
+- POST /api/problems/gfg
+- POST /api/problems/leetcode-list
+- POST /api/problems/leetcode-list/create-folder
+- POST /api/ai/analyze
+
+### YouTube Playlist Service via gateway
+- POST /api/youtube-playlist/import
+- GET /api/youtube-playlist/sheets
+- GET /api/youtube-playlist/sheet/:id
+- PATCH /api/youtube-playlist/sheet/:id
+- PUT /api/youtube-playlist/sheet/:id
+- DELETE /api/youtube-playlist/sheet/:id
+- POST /api/youtube-playlist/sheet/:id/create-folder
+
+### Profile Analysis Service via gateway
+- GET /api/profile-analysis/:username
+- POST /api/profile-analysis/recommendations
+- POST /api/profile-analysis/topic-questions
+- POST /api/profile-analysis/import-weak-areas
+- POST /api/profile-analysis/revision
+- GET /api/profile-analysis/revision/:username
+- DELETE /api/profile-analysis/revision/:id
+
+---
+
+## Tech stack
 
 ### Frontend
-
-- React 19 + Vite
+- React 19
+- Vite
 - React Router
 - Zustand
 - Tailwind CSS
+- Clerk
 - Monaco Editor
 - Framer Motion
 - Axios
-- Clerk
 
 ### Backend
+- Node.js
+- Express
+- http-proxy-middleware
+- Sequelize with PostgreSQL
+- Mongoose with MongoDB
+- Axios
 
-- Node.js + Express
-- API Gateway with proxy middleware
-- Unified service for files, problems, and AI endpoints
-- Playlist service for YouTube ingestion and matching
-- Profile analysis service for stats and recommendations
-- Sequelize (PostgreSQL) + Mongoose (MongoDB)
-
-### External Integrations
-
-- LeetCode GraphQL
+### External integrations
+- LeetCode APIs
 - YouTube Data API v3
 - OpenRouter
 
-## Repository Structure
+### Deployment
+- Docker
+- Docker Compose
+- Nginx
+
+---
+
+## Repository structure
 
 ```text
 .
@@ -217,13 +324,16 @@ sequenceDiagram
 |     |- youtube-playlist-service/
 |     `- profile-analysis-service/
 |- docker-compose.yml
+|- nginx.conf
 |- start-backend.ps1
 `- README.md
 ```
 
-## Local Development
+---
 
-### 1) Install dependencies
+## Local development
+
+## 1) Install dependencies
 
 ```bash
 npm install
@@ -235,126 +345,109 @@ npm install --prefix backend/services/youtube-playlist-service
 npm install --prefix backend/services/profile-analysis-service
 ```
 
-### 2) Configure environment
+## 2) Configure environment
 
-```bash
-cp .env.example .env
-```
+Create root .env with required values.
 
-Fill required variables in root `.env`:
+Minimum required:
 
-- `DATABASE_URL`
-- `OPENAI_API_KEY` (or OpenRouter-compatible key)
-- `YOUTUBE_API_KEY`
-- `MONGO_URI`
-- `CLERK_SECRET_KEY`
-- `VITE_CLERK_PUBLISHABLE_KEY`
+- DATABASE_URL
+- MONGO_URI
+- YOUTUBE_API_KEY
+- OPENROUTER_API_KEY or OPENAI_API_KEY
+- CLERK_SECRET_KEY
+- CLERK_PUBLISHABLE_KEY
+- VITE_CLERK_PUBLISHABLE_KEY
 
-### 3) Run backend services
+Optional but useful:
 
-From repo root:
+- UNIFIED_SERVICE_URL
+- PLAYLIST_SERVICE_URL
+- PROFILE_SERVICE_URL
+- ENABLE_DEV_AUTH_FALLBACK=true (local development only)
+
+## 3) Run backend
+
+Option A:
 
 ```bash
 npm run start:backend
 ```
 
-### 4) Run frontend
+Option B on Windows:
+
+```powershell
+./start-backend.ps1
+```
+
+## 4) Run frontend
 
 ```bash
 npm run dev --prefix client
 ```
 
-## Docker Deployment
+---
 
-Build and start all services:
+## Docker deployment
+
+## Build and run
 
 ```bash
 docker compose up --build -d
 ```
 
-Update stack after changes:
-
-```bash
-docker compose pull
-docker compose up -d --remove-orphans
-```
-
-Included containers:
-
-- client
-- gateway
-- unified-service
-- youtube-playlist-service
-- profile-analysis-service
-- mongodb
-
-## EC2 Quick Deploy
-
-### 1) Provision
-
-- Ubuntu 22.04 LTS
-- 30 GB+ disk
-- Open ports: 22, 80, 443 (if TLS enabled)
-
-### 2) Install runtime tools
-
-```bash
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-plugin git
-sudo usermod -aG docker $USER
-```
-
-Reconnect SSH once after adding Docker group.
-
-### 3) Clone and configure
-
-```bash
-sudo mkdir -p /opt/algonote
-sudo chown -R $USER:$USER /opt/algonote
-cd /opt/algonote
-git clone <your-repo-url> .
-```
-
-Create root `.env` with production values.
-
-### 4) Start
-
-```bash
-docker compose pull
-docker compose up -d --remove-orphans
-```
-
-### 5) Verify
+## Check status
 
 ```bash
 docker compose ps
 docker compose logs -f gateway
 ```
 
-## API Surface (High Level)
+## Update existing deployment
 
-- `GET /api/files`
-- `POST /api/files`
-- `PUT /api/files/:id`
-- `DELETE /api/files/:id`
-- `GET /api/problems/:fileId`
-- `PUT /api/problems/:fileId`
-- `POST /api/problems/import`
-- `POST /api/ai/analyze`
-- `POST /api/youtube-playlist/import`
-- `GET /api/youtube-playlist/sheets`
-- `GET /api/youtube-playlist/sheet/:id`
-- `POST /api/youtube-playlist/sheet/:id/create-folder`
-- `GET /api/profile-analysis/:username`
-- `POST /api/profile-analysis/recommendations`
-- `POST /api/profile-analysis/import-weak-areas`
+```bash
+docker compose pull
+docker compose up -d --remove-orphans
+```
 
-## Troubleshooting
+---
 
-- Backend exits with `EADDRINUSE`: a service port is already occupied. Free the port or change service port env values.
-- Playlist import succeeds but add-to-workspace fails: verify `UNIFIED_SERVICE_URL`, `FILE_SERVICE_URL`, and `PROBLEM_SERVICE_URL` are reachable from playlist service runtime.
-- Missing auth behavior: ensure `CLERK_SECRET_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` are correctly set.
+## Production readiness checklist
+
+- Set all production environment variables.
+- Use real Clerk keys and enforce auth in gateway.
+- Restrict CORS and harden allowed origins.
+- Add HTTPS termination with reverse proxy/load balancer.
+- Enable observability: logs, health checks, uptime alerts.
+- Run database backups and restore drills.
+- Add rate limiting at gateway layer.
+- Validate API key quotas for YouTube and OpenRouter.
+- Add CI pipeline for lint, build, and smoke tests.
+
+---
+
+## Known startup pitfalls
+
+- Missing Clerk keys can stop authenticated flows.
+- Neon/PostgreSQL cold starts can delay service boot.
+- Playlist import may be slower for long playlists.
+- Port conflicts on 5001, 5005, 5006, or 5007 will break startup.
+
+---
 
 ## Vision
 
-AlgoNote AI is moving toward an interview-prep operating system where discovery, solving, revision, and feedback loops live in one place with minimal context switching.
+AlgoNote AI is designed as a long-term interview prep operating system:
+
+- structured capture,
+- deliberate practice,
+- revision discipline,
+- and data-backed improvement,
+
+all in one place.
+
+---
+
+## Author note
+
+This is not a demo-only side tool. It is a product foundation built to be shipped live, iterated continuously, and improved through real usage.
